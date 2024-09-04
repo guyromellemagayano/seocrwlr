@@ -1,0 +1,46 @@
+services:
+  traefik:
+    image: traefik:3.1.2
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`traefik.environment`,`local`)"
+      - "--entrypoints.web.address=:8000"
+    ports:
+      - 8000:8000
+      - 8080:8080
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api/`)||PathPrefix(`/auth/`)||PathPrefix(`/admin/`)||PathPrefix(`/static/`)"
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    image: seocrwlr-backend
+    stdin_open: false
+    tty: true
+    command: ./docker.dev.sh
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api/`)||PathPrefix(`/auth/`)||PathPrefix(`/admin/`)||PathPrefix(`/static/`)"
+      - "traefik.environment=local"
+  db:
+    image: postgres:16.4
+    environment:
+      POSTGRES_PASSWORD: seocrwlrdev
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      
+volumes:
+  db-data:
+    driver: local
